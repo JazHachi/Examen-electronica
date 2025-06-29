@@ -138,3 +138,127 @@ void intentarEscapar() {
   tiempoInicioFase = millis();
 }
 ~~~
+~~~
+#include <Stepper.h>
+
+const int stepsPerRevolution = 2048;
+Stepper motor(stepsPerRevolution, 8, 10, 9, 11);
+
+// Fases: 0 = respiración, 1 = inquietud, 2 = fuga
+int fase = 0;
+unsigned long tiempoInicioFase = 0;
+
+// ---- Duraciones por fase ----
+const unsigned long duracionRespiracion = 25000;
+const unsigned long duracionInquietud   = 35000;
+const unsigned long duracionFuga        = 40000;
+
+// ---- Movimiento general ----
+unsigned long ultimoMovimiento = 0;
+
+// ---- FUGA: variables internas ----
+bool escapeEnPausa = false;
+unsigned long tiempoUltimoEscape = 0;
+int escapePasosRestantes = 4;
+unsigned long duracionPausaActual = 0;
+
+// ---- LÍMITES DE SEGURIDAD ----
+const int VELOCIDAD_MAX = 20;
+const int VELOCIDAD_MIN = 3;
+const int PASOS_MAX = 1200;
+
+void setup() {
+  randomSeed(analogRead(A0));
+  tiempoInicioFase = millis();
+}
+
+// ---- Función segura para mover el motor ----
+void moverSeguro(int velocidad, int pasos) {
+  velocidad = constrain(velocidad, VELOCIDAD_MIN, VELOCIDAD_MAX);
+  pasos = constrain(pasos, -PASOS_MAX, PASOS_MAX);
+  motor.setSpeed(velocidad);
+  motor.step(pasos);
+}
+
+// ---- LOOP PRINCIPAL ----
+void loop() {
+  unsigned long ahora = millis();
+
+  // Cambio de fase por duración
+  if (fase == 0 && ahora - tiempoInicioFase > duracionRespiracion) {
+    fase = 1;
+    tiempoInicioFase = ahora;
+  } else if (fase == 1 && ahora - tiempoInicioFase > duracionInquietud) {
+    fase = 2;
+    tiempoInicioFase = ahora;
+    escapePasosRestantes = 4;
+    escapeEnPausa = false;
+    tiempoUltimoEscape = ahora;
+    duracionPausaActual = random(8000, 15000);  // pausa inicial aleatoria
+  } else if (fase == 2 && ahora - tiempoInicioFase > duracionFuga) {
+    fase = 0;
+    tiempoInicioFase = ahora;
+  }
+
+  // Ejecutar comportamiento por fase
+  switch (fase) {
+    case 0: respirar(); break;
+    case 1: moverseInquieto(); break;
+    case 2: intentarEscapar(); break;
+  }
+}
+
+// ---------------------------
+// FASE 0: Respiración
+void respirar() {
+  if (millis() - ultimoMovimiento >= 4000) {
+    moverSeguro(5, 500);   // inhalar
+    delay(2000);
+    moverSeguro(5, -500);  // exhalar
+    delay(2000);
+    ultimoMovimiento = millis();
+  }
+}
+
+// ---------------------------
+// FASE 1: Inquietud
+void moverseInquieto() {
+  if (millis() - ultimoMovimiento >= random(4000, 12000)) {
+    int dir = random(0, 2) == 0 ? -1 : 1;
+    int pasos = random(300, 1000);
+    int velocidad = random(5, 18);
+    moverSeguro(velocidad, dir * pasos);
+    ultimoMovimiento = millis();
+  }
+}
+
+// ---------------------------
+// FASE 2: Fuga con pausas aleatorias y dirección variable
+void intentarEscapar() {
+  unsigned long ahora = millis();
+
+  if (escapePasosRestantes <= 0) {
+    fase = 0;
+    tiempoInicioFase = ahora;
+    return;
+  }
+
+  if (escapeEnPausa) {
+    if (ahora - tiempoUltimoEscape >= duracionPausaActual) {
+      // Espasmo inesperado
+      if (random(0, 3) == 0) {
+        moverSeguro(18, 300);
+        delay(300);
+      }
+      escapeEnPausa = false;
+    }
+  } else {
+    int direccion = random(0, 2) == 0 ? -1 : 1;  // nueva: dirección aleatoria
+    moverSeguro(12, direccion * 700);           // velocidad más suave
+    escapePasosRestantes--;
+    escapeEnPausa = true;
+    tiempoUltimoEscape = ahora;
+    duracionPausaActual = random(8000, 15000);  // pausa aleatoria prolongada
+  }
+}
+~~~
